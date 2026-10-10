@@ -1,0 +1,15 @@
+name: Feature or rule idea
+description: Suggest a new rule, output format or editor feature.
+labels: [enhancement]
+body:
+  - type: textarea
+    id: problem
+    attributes:
+      label: What DI mistake or need is this about?
+      description: For a new rule, show the registrations that should be flagged and why they're a problem.
+    validations:
+      required: true
+  - type: textarea
+    id: proposal
+    attributes:
+      label: What would you like DiScope to do?

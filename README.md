@@ -1,12 +1,16 @@
 # DiScope
 
+[![CI](https://github.com/Monem-Benjeddou/DiScope/actions/workflows/ci.yml/badge.svg)](https://github.com/Monem-Benjeddou/DiScope/actions/workflows/ci.yml)
+[![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
+![.NET 8+](https://img.shields.io/badge/.NET-8%2B-512BD4)
+
 **See your .NET dependency injection graph, and the bugs hiding in it.**
 
 DiScope reads the *real* `IServiceCollection` of your ASP.NET Core or Worker app, draws the dependency graph, and flags
 the DI mistakes that normally only show up at runtime or in production: captive dependencies, missing registrations,
 cycles, shadowed registrations and more.
 
-![DiScope graph of a sample API](docs/graph.png)
+![DiScope graph of a sample API](https://raw.githubusercontent.com/Monem-Benjeddou/DiScope/main/docs/graph.png)
 
 ```text
 $ discope samples/BuggyApi
@@ -80,7 +84,7 @@ discope MyApi.csproj --format mermaid  # paste into a README or pull request
 - **Click a diagnostic** to highlight its exact path.
 - Search (`/`), fit (`F`), App / Packages / Framework filters, light and dark themes.
 
-![Selecting a captive dependency highlights its path](docs/captive-path.png)
+![Selecting a captive dependency highlights its path](https://raw.githubusercontent.com/Monem-Benjeddou/DiScope/main/docs/captive-path.png)
 
 ## Rules
 
@@ -144,6 +148,11 @@ node editors/vscode/test/smoke.js "$PWD/src/DiScope.Cli/bin/Debug/net8.0/discope
 - Visual Studio extension (tool window + Error List)
 - Minimal API handler parameters, `--entry` mode for class libraries, namespace clustering for very large graphs
 
+## Contributing
+
+Bug reports, especially false positives, and new rule ideas are very welcome. See [CONTRIBUTING.md](CONTRIBUTING.md).
+Please follow the [code of conduct](CODE_OF_CONDUCT.md), and report security issues as described in [SECURITY.md](SECURITY.md).
+
 ## License
 
-MIT
+[MIT](LICENSE)

@@ -130,7 +130,10 @@ internal sealed class HostCapture : IObserver<DiagnosticListener>, IObserver<Key
             var graph = GraphBuilder.Build(services, _app, _appAssemblies);
             graph.App.CapturedFrom = _builderType;
             ServiceCount = graph.Services.Count;
-            File.WriteAllText(_outputPath, JsonSerializer.Serialize(graph, Json));
+            // Write then rename, so the CLI never sees a half-written file even if the app exits right after.
+            var temp = _outputPath + ".tmp";
+            File.WriteAllText(temp, JsonSerializer.Serialize(graph, Json));
+            File.Move(temp, _outputPath, overwrite: true);
         }
         catch (Exception ex)
         {

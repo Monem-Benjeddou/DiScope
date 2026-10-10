@@ -6,5 +6,10 @@
     <Version>0.1.0</Version>
     <Authors>DiScope contributors</Authors>
     <PackageLicenseExpression>MIT</PackageLicenseExpression>
+    <PackageProjectUrl>https://github.com/Monem-Benjeddou/DiScope</PackageProjectUrl>
+    <RepositoryUrl>https://github.com/Monem-Benjeddou/DiScope.git</RepositoryUrl>
+    <RepositoryType>git</RepositoryType>
+    <PackageReleaseNotes>https://github.com/Monem-Benjeddou/DiScope/blob/main/CHANGELOG.md</PackageReleaseNotes>
+    <Copyright>Copyright (c) DiScope contributors</Copyright>
   </PropertyGroup>
 </Project>

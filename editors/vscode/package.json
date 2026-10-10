@@ -9,25 +9,62 @@
   "engines": {
     "vscode": "^1.85.0"
   },
-  "categories": ["Linters", "Visualization", "Other"],
-  "keywords": ["dependency injection", "di", "ioc", "asp.net core", ".net", "c#", "captive dependency"],
+  "categories": [
+    "Linters",
+    "Visualization",
+    "Other"
+  ],
+  "keywords": [
+    "dependency injection",
+    "di",
+    "ioc",
+    "asp.net core",
+    ".net",
+    "c#",
+    "captive dependency"
+  ],
   "main": "./extension.js",
   "activationEvents": [],
   "contributes": {
     "commands": [
-      { "command": "discope.analyze", "title": "Analyze Dependency Injection", "category": "DiScope", "icon": "$(type-hierarchy)" },
-      { "command": "discope.showGraph", "title": "Show DI Graph", "category": "DiScope", "icon": "$(type-hierarchy)" },
-      { "command": "discope.revealInGraph", "title": "Reveal in DI Graph", "category": "DiScope" }
+      {
+        "command": "discope.analyze",
+        "title": "Analyze Dependency Injection",
+        "category": "DiScope",
+        "icon": "$(type-hierarchy)"
+      },
+      {
+        "command": "discope.showGraph",
+        "title": "Show DI Graph",
+        "category": "DiScope",
+        "icon": "$(type-hierarchy)"
+      },
+      {
+        "command": "discope.revealInGraph",
+        "title": "Reveal in DI Graph",
+        "category": "DiScope"
+      }
     ],
     "menus": {
       "explorer/context": [
-        { "command": "discope.analyze", "when": "resourceExtname == .csproj || resourceExtname == .fsproj || resourceExtname == .vbproj", "group": "navigation@90" }
+        {
+          "command": "discope.analyze",
+          "when": "resourceExtname == .csproj || resourceExtname == .fsproj || resourceExtname == .vbproj",
+          "group": "navigation@90"
+        }
       ],
       "editor/context": [
-        { "command": "discope.revealInGraph", "when": "editorLangId == csharp", "group": "navigation@90" }
+        {
+          "command": "discope.revealInGraph",
+          "when": "editorLangId == csharp",
+          "group": "navigation@90"
+        }
       ],
       "commandPalette": [
-        { "command": "discope.revealInGraph", "when": "editorLangId == csharp" }
+        {
+          "command": "discope.revealInGraph",
+          "when": "editorLangId == csharp"
+        }
       ]
     },
     "configuration": {
@@ -63,5 +100,14 @@
   },
   "scripts": {
     "package": "npx @vscode/vsce package"
-  }
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/Monem-Benjeddou/DiScope.git",
+    "directory": "editors/vscode"
+  },
+  "bugs": {
+    "url": "https://github.com/Monem-Benjeddou/DiScope/issues"
+  },
+  "homepage": "https://github.com/Monem-Benjeddou/DiScope#readme"
 }

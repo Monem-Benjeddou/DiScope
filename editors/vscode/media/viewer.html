@@ -334,7 +334,7 @@ const DATA = /*__DISCOPE_DATA__*/null;
   const clip = (s, n) => (s.length > n ? s.slice(0, n - 1) + '…' : s);
   const ROOT_KINDS = new Set(['Controller', 'Hub', 'PageModel', 'Middleware']);
   const SEV_RANK = { error: 0, warning: 1, info: 2 };
-  const NODE_W = 232, NODE_H = 54, GAP_X = 96, GAP_Y = 16;
+  const NODE_W = 232, NODE_H = 54, GAP_X = 120, GAP_Y = 18;
 
   const store = {
     get(k) { try { return localStorage.getItem('discope.' + k); } catch (e) { return null; } },
@@ -450,78 +450,240 @@ const DATA = /*__DISCOPE_DATA__*/null;
   }
 
   // ------------------------------------------------------------ layout (layered, left to right)
+  //
+  // Sugiyama-style: break cycles, assign layers, insert a dummy waypoint for every column a long edge crosses
+  // (so edges run through reserved gaps, never under a node), reduce crossings, then straighten edges by
+  // placing each node near its neighbours. Edges attach at spread-out ports along the node's sides.
+  const DUMMY_H = 4, DUMMY_GAP = 8;
+
   function computeLayout(ids) {
-    const pos = new Map();
-    const succ = new Map(), pred = new Map();
-    for (const id of ids) { succ.set(id, []); pred.set(id, []); }
-    const pairs = new Set();
+    const byName = (a, b) => title(g.nodes.get(a)).localeCompare(title(g.nodes.get(b)));
+
+    // Unique edges between visible nodes, in their original (consumer → dependency) direction.
+    const edges = [], selfLoops = [], seen = new Set();
     for (const id of ids) {
       for (const e of g.out.get(id) || []) {
-        if (!ids.has(e.to) || e.to === id || pairs.has(id + '>' + e.to)) continue;
-        pairs.add(id + '>' + e.to);
-        succ.get(id).push(e.to);
-        pred.get(e.to).push(id);
+        const key = id + '>' + e.to;
+        if (!ids.has(e.to) || seen.has(key)) continue;
+        seen.add(key);
+        if (e.to === id) selfLoops.push({ from: id, to: id, key, dep: e.dep });
+        else edges.push({ from: id, to: e.to, key, dep: e.dep });
       }
     }
+    const linked = new Set();
+    edges.forEach((e) => { linked.add(e.from); linked.add(e.to); });
+    selfLoops.forEach((e) => linked.add(e.from));
+    const connected = [...ids].filter((id) => linked.has(id)).sort(byName);
+    const isolated = [...ids].filter((id) => !linked.has(id)).sort(byName);
 
-    const byName = (a, b) => title(g.nodes.get(a)).localeCompare(title(g.nodes.get(b)));
-    const connected = [...ids].filter((id) => succ.get(id).length || pred.get(id).length);
-    const isolated = [...ids].filter((id) => !succ.get(id).length && !pred.get(id).length).sort(byName);
-
-    // DFS from roots first: back edges break cycles, reverse post-order gives a topological order.
-    const starts = connected.filter((id) => !pred.get(id).length).sort(byName).concat(connected.slice().sort(byName));
-    const mark = new Map(), back = new Set(), post = [];
-    for (const s of starts) {
-      if (mark.has(s)) continue;
-      const stack = [[s, 0]];
-      mark.set(s, 1);
+    // 1. Break cycles: DFS from the roots; edges back into the DFS stack are reversed for layout only.
+    const succ = new Map(connected.map((id) => [id, []]));
+    const hasPred = new Set(edges.map((e) => e.to));
+    edges.forEach((e) => succ.get(e.from).push(e));
+    const state = new Map(), back = new Set();
+    for (const start of connected.filter((id) => !hasPred.has(id)).concat(connected)) {
+      if (state.has(start)) continue;
+      const stack = [[start, 0]];
+      state.set(start, 1);
       while (stack.length) {
         const top = stack[stack.length - 1];
-        const children = succ.get(top[0]);
-        if (top[1] < children.length) {
-          const c = children[top[1]++];
-          if (!mark.has(c)) { mark.set(c, 1); stack.push([c, 0]); }
-          else if (mark.get(c) === 1) back.add(top[0] + '>' + c);
+        const out = succ.get(top[0]);
+        if (top[1] < out.length) {
+          const e = out[top[1]++];
+          if (!state.has(e.to)) { state.set(e.to, 1); stack.push([e.to, 0]); }
+          else if (state.get(e.to) === 1) back.add(e.key);
         } else {
-          mark.set(top[0], 2);
-          post.push(top[0]);
+          state.set(top[0], 2);
           stack.pop();
         }
       }
     }
-    const topo = post.reverse();
+    edges.forEach((e) => {
+      e.reversed = back.has(e.key);
+      e.u = e.reversed ? e.to : e.from;
+      e.v = e.reversed ? e.from : e.to;
+    });
 
-    const layer = new Map(topo.map((id) => [id, 0]));
-    for (const u of topo) for (const v of succ.get(u)) if (!back.has(u + '>' + v)) layer.set(v, Math.max(layer.get(v), layer.get(u) + 1));
-
-    const layers = [];
-    for (const id of topo) (layers[layer.get(id)] = layers[layer.get(id)] || []).push(id);
-    const rank = new Map();
-    const refresh = () => layers.forEach((l) => l.forEach((id, i) => rank.set(id, (i + 0.5) / l.length)));
-    refresh();
-    const bary = (id, nbrs) => {
-      const ns = nbrs.get(id).filter((n) => rank.has(n));
-      return ns.length ? ns.reduce((s, n) => s + rank.get(n), 0) / ns.length : rank.get(id);
-    };
-    for (let iter = 0; iter < 8; iter++) {
-      const down = iter % 2 === 0;
-      const order = down ? layers.map((_, i) => i) : layers.map((_, i) => layers.length - 1 - i);
-      for (const li of order) {
-        const l = layers[li];
-        const score = new Map(l.map((id) => [id, bary(id, down ? pred : succ)]));
-        l.sort((a, b) => score.get(a) - score.get(b));
-        l.forEach((id, i) => rank.set(id, (i + 0.5) / l.length));
+    // 2. Layers: longest path from the sources (Kahn).
+    const dagOut = new Map(connected.map((id) => [id, []]));
+    const indeg = new Map(connected.map((id) => [id, 0]));
+    edges.forEach((e) => { dagOut.get(e.u).push(e); indeg.set(e.v, indeg.get(e.v) + 1); });
+    const layerOf = new Map(connected.map((id) => [id, 0]));
+    const queue = connected.filter((id) => indeg.get(id) === 0);
+    while (queue.length) {
+      const u = queue.shift();
+      for (const e of dagOut.get(u)) {
+        layerOf.set(e.v, Math.max(layerOf.get(e.v), layerOf.get(u) + 1));
+        indeg.set(e.v, indeg.get(e.v) - 1);
+        if (indeg.get(e.v) === 0) queue.push(e.v);
+      }
+    }
+    // Pull nodes whose dependencies all live further right next to them (shorter edges, fewer dummies).
+    for (const id of [...connected].sort((a, b) => layerOf.get(b) - layerOf.get(a))) {
+      const outs = dagOut.get(id);
+      if (outs.length && [...edges].every((e) => e.v !== id)) {
+        layerOf.set(id, Math.min(...outs.map((e) => layerOf.get(e.v))) - 1);
       }
     }
 
-    const tallest = Math.max(0, ...layers.map((l) => l.length));
-    const height = tallest * (NODE_H + GAP_Y);
-    layers.forEach((l, li) => {
-      const offset = (height - l.length * (NODE_H + GAP_Y)) / 2;
-      l.forEach((id, i) => pos.set(id, { x: li * (NODE_W + GAP_X), y: offset + i * (NODE_H + GAP_Y) }));
+    // 3. Dummy waypoints for edges that span several layers.
+    const meta = new Map(connected.map((id) => [id, { h: NODE_H, dummy: false, layer: layerOf.get(id) }]));
+    const up = new Map(connected.map((id) => [id, []]));
+    const down = new Map(connected.map((id) => [id, []]));
+    edges.forEach((e, i) => {
+      e.chain = [e.u];
+      for (let l = layerOf.get(e.u) + 1; l < layerOf.get(e.v); l++) {
+        const d = `~${i}~${l}`;
+        meta.set(d, { h: DUMMY_H, dummy: true, layer: l });
+        up.set(d, []);
+        down.set(d, []);
+        e.chain.push(d);
+      }
+      e.chain.push(e.v);
+      for (let k = 0; k + 1 < e.chain.length; k++) {
+        down.get(e.chain[k]).push(e.chain[k + 1]);
+        up.get(e.chain[k + 1]).push(e.chain[k]);
+      }
     });
+    const layerCount = connected.length ? Math.max(...[...meta.values()].map((m) => m.layer)) + 1 : 0;
+    let layers = Array.from({ length: layerCount }, () => []);
+    for (const [id, m] of meta) layers[m.layer].push(id);
 
-    let width = Math.max(0, layers.length * (NODE_W + GAP_X) - GAP_X);
+    // 4. Crossing reduction: barycenter sweeps, keeping the best ordering seen.
+    const index = new Map();
+    const reindex = (ls) => ls.forEach((l) => l.forEach((id, i) => index.set(id, i)));
+    const bary = (id, nbrs) => {
+      const ns = nbrs.get(id);
+      return ns.length ? ns.reduce((s, n) => s + index.get(n), 0) / ns.length : index.get(id);
+    };
+    const crossings = (ls) => {
+      let total = 0;
+      for (let l = 0; l + 1 < ls.length; l++) {
+        const segs = [];
+        for (const id of ls[l]) for (const t of down.get(id)) segs.push([index.get(id), index.get(t)]);
+        for (let a = 0; a < segs.length; a++)
+          for (let b = a + 1; b < segs.length; b++)
+            if ((segs[a][0] - segs[b][0]) * (segs[a][1] - segs[b][1]) < 0) total++;
+      }
+      return total;
+    };
+    if (layers.length) layers[0].sort(byName);
+    reindex(layers);
+    for (let l = 1; l < layers.length; l++) {
+      const score = new Map(layers[l].map((id) => [id, bary(id, up)]));
+      layers[l].sort((a, b) => score.get(a) - score.get(b));
+      layers[l].forEach((id, i) => index.set(id, i));
+    }
+    let best = layers.map((l) => l.slice()), bestCrossings = crossings(layers);
+    for (let iter = 0; iter < 24 && bestCrossings > 0; iter++) {
+      const downward = iter % 2 === 0;
+      const order = downward ? layers.map((_, i) => i).slice(1) : layers.map((_, i) => layers.length - 2 - i).filter((i) => i >= 0);
+      for (const l of order) {
+        const score = new Map(layers[l].map((id) => [id, bary(id, downward ? up : down)]));
+        layers[l].sort((a, b) => score.get(a) - score.get(b));
+        layers[l].forEach((id, i) => index.set(id, i));
+      }
+      const c = crossings(layers);
+      if (c < bestCrossings) { bestCrossings = c; best = layers.map((l) => l.slice()); }
+    }
+    layers = best;
+    reindex(layers);
+
+    // 5. Vertical placement: pull each node towards its neighbours, keeping order and spacing
+    //    (isotonic regression per layer). Long edges become straight lines through their lanes.
+    const top = new Map();
+    for (const l of layers) {
+      let cursor = 0;
+      for (const id of l) { top.set(id, cursor); cursor += meta.get(id).h + gapAfter(id); }
+    }
+    function gapAfter(id) { return meta.get(id).dummy ? DUMMY_GAP : GAP_Y; }
+    const center = (id) => top.get(id) + meta.get(id).h / 2;
+    const median = (xs) => {
+      const s = xs.slice().sort((a, b) => a - b);
+      const m = s.length >> 1;
+      return s.length % 2 ? s[m] : (s[m - 1] + s[m]) / 2;
+    };
+    const place = (l, desiredCenters) => {
+      // Minimise Σ(top - desired)² subject to top[i] ≥ top[i-1] + h[i-1] + gap: pool adjacent violators.
+      let offset = 0;
+      const blocks = [];
+      l.forEach((id, i) => {
+        const want = desiredCenters[i] - meta.get(id).h / 2 - offset;
+        blocks.push({ sum: want, n: 1, count: 1 });
+        while (blocks.length > 1 && blocks[blocks.length - 2].sum / blocks[blocks.length - 2].n > blocks[blocks.length - 1].sum / blocks[blocks.length - 1].n) {
+          const b = blocks.pop();
+          const a = blocks[blocks.length - 1];
+          a.sum += b.sum; a.n += b.n; a.count += b.count;
+        }
+        offset += meta.get(id).h + gapAfter(id);
+      });
+      let i = 0, acc = 0;
+      for (const b of blocks) {
+        const z = b.sum / b.n;
+        for (let k = 0; k < b.count; k++, i++) {
+          top.set(l[i], z + acc);
+          acc += meta.get(l[i]).h + gapAfter(l[i]);
+        }
+      }
+    };
+    for (let iter = 0; iter < 16; iter++) {
+      const downward = iter % 2 === 0;
+      const both = iter >= 10;
+      const order = downward ? layers.map((_, i) => i) : layers.map((_, i) => layers.length - 1 - i);
+      for (const li of order) {
+        const l = layers[li];
+        const desired = l.map((id) => {
+          const ns = both ? up.get(id).concat(down.get(id)) : (downward ? up : down).get(id);
+          return ns.length ? median(ns.map(center)) : center(id);
+        });
+        place(l, desired);
+      }
+    }
+    const minTop = Math.min(0, ...[...top.values()]);
+    for (const [id, t] of top) top.set(id, t - minTop);
+
+    // 6. Coordinates, ports and paths.
+    const colX = (l) => l * (NODE_W + GAP_X);
+    const pos = new Map();
+    for (const id of connected) pos.set(id, { x: colX(layerOf.get(id)), y: top.get(id) });
+    const height = connected.length ? Math.max(...[...meta.keys()].map((id) => top.get(id) + meta.get(id).h)) : 0;
+
+    const outPort = new Map(), inPort = new Map();
+    const spread = (list, nodeTop, otherCenter, ports) => {
+      list.sort((a, b) => otherCenter(a) - otherCenter(b));
+      const step = list.length > 1 ? Math.min(9, (NODE_H - 16) / (list.length - 1)) : 0;
+      list.forEach((e, k) => ports.set(e, nodeTop + NODE_H / 2 + (k - (list.length - 1) / 2) * step));
+    };
+    for (const id of connected) {
+      spread(edges.filter((e) => e.chain[0] === id), top.get(id), (e) => center(e.chain[1]), outPort);
+      spread(edges.filter((e) => e.chain[e.chain.length - 1] === id), top.get(id), (e) => center(e.chain[e.chain.length - 2]), inPort);
+    }
+
+    for (const e of edges) {
+      const ux = colX(layerOf.get(e.u)) + NODE_W + (e.reversed ? 1 : 0);
+      let d = `M${ux} ${outPort.get(e)}`;
+      let cx = ux, cy = outPort.get(e);
+      const curve = (x, y) => {
+        const dx = Math.max(24, (x - cx) / 2);
+        d += ` C${cx + dx} ${cy}, ${x - dx} ${y}, ${x} ${y}`;
+        cx = x; cy = y;
+      };
+      for (const w of e.chain.slice(1, -1)) {
+        const wy = center(w), wx = colX(meta.get(w).layer);
+        curve(wx, wy);
+        d += ` L${wx + NODE_W} ${wy}`;
+        cx = wx + NODE_W;
+      }
+      curve(colX(layerOf.get(e.v)) - (e.reversed ? 0 : 1), inPort.get(e));
+      e.d = d;
+    }
+    for (const e of selfLoops) {
+      const p = pos.get(e.from), x = p.x + NODE_W, y = p.y + NODE_H / 2;
+      e.d = `M${x} ${y - 12} C${x + 50} ${y - 44}, ${x + 50} ${y + 44}, ${x + 1} ${y + 12}`;
+    }
+
+    // Unconnected services in a grid underneath.
+    let width = Math.max(0, layerCount * (NODE_W + GAP_X) - GAP_X);
     let totalHeight = height;
     let isolatedTop = null;
     if (isolated.length) {
@@ -531,7 +693,7 @@ const DATA = /*__DISCOPE_DATA__*/null;
       width = Math.max(width, cols * (NODE_W + 24) - 24);
       totalHeight = isolatedTop + 24 + Math.ceil(isolated.length / cols) * (NODE_H + GAP_Y);
     }
-    return { pos, width, height: totalHeight, isolatedTop, isolatedCount: isolated.length, connectedCount: connected.length };
+    return { pos, edges: edges.concat(selfLoops), width, height: totalHeight, isolatedTop, isolatedCount: isolated.length, connectedCount: connected.length };
   }
 
   // ------------------------------------------------------------ rendering
@@ -554,23 +716,17 @@ const DATA = /*__DISCOPE_DATA__*/null;
       t.textContent = layout.connectedCount ? `Not connected (${layout.isolatedCount})` : `Services (${layout.isolatedCount})`;
     }
 
-    const drawn = new Set();
-    for (const id of ids) {
-      const from = layout.pos.get(id);
-      for (const e of g.out.get(id) || []) {
-        const key = id + '>' + e.to;
-        if (!ids.has(e.to) || drawn.has(key)) continue;
-        drawn.add(key);
-        const to = layout.pos.get(e.to);
-        const cls = ['edge'];
-        if (g.captive.has(key)) cls.push('captive');
-        else if (g.cycle.has(key)) cls.push('cycle');
-        else if (e.dep.resolution === 'missing') cls.push('missing');
-        else if (e.dep.resolution === 'enumerable') cls.push('enumerable');
-        else if (e.dep.site === 'factory') cls.push('factory');
-        const path = el('path', { d: edgePath(from, to, id === e.to), class: cls.join(' '), 'data-from': id, 'data-to': e.to }, edgesG);
-        path.setAttribute('marker-end', cls.includes('captive') || cls.includes('cycle') ? 'url(#arrow-red)' : 'url(#arrow)');
-      }
+    for (const e of layout.edges) {
+      const cls = ['edge'];
+      if (g.captive.has(e.key)) cls.push('captive');
+      else if (g.cycle.has(e.key)) cls.push('cycle');
+      else if (e.dep.resolution === 'missing') cls.push('missing');
+      else if (e.dep.resolution === 'enumerable') cls.push('enumerable');
+      else if (e.dep.site === 'factory') cls.push('factory');
+      const attrs = { d: e.d, class: cls.join(' '), 'data-from': e.from, 'data-to': e.to };
+      if (e.reversed) attrs['data-rev'] = '1';
+      const path = el('path', attrs, edgesG);
+      path.setAttribute(e.reversed ? 'marker-start' : 'marker-end', cls.includes('captive') || cls.includes('cycle') ? 'url(#arrow-red)' : 'url(#arrow)');
     }
 
     for (const id of ids) {
@@ -593,22 +749,6 @@ const DATA = /*__DISCOPE_DATA__*/null;
     applyView();
     applyHighlight();
     renderFocusBar();
-  }
-
-  function edgePath(a, b, self) {
-    if (self) {
-      const x = a.x + NODE_W, y = a.y + NODE_H / 2;
-      return `M${x} ${y - 10} C${x + 46} ${y - 40}, ${x + 46} ${y + 40}, ${x} ${y + 10}`;
-    }
-    if (b.x > a.x) {
-      const x1 = a.x + NODE_W, y1 = a.y + NODE_H / 2, x2 = b.x - 2, y2 = b.y + NODE_H / 2;
-      const dx = Math.max(40, (x2 - x1) / 2);
-      return `M${x1} ${y1} C${x1 + dx} ${y1}, ${x2 - dx} ${y2}, ${x2} ${y2}`;
-    }
-    // Back edge (cycle) or same column: loop underneath.
-    const x1 = a.x + NODE_W / 2, y1 = a.y + NODE_H, x2 = b.x + NODE_W / 2, y2 = b.y + NODE_H + 2;
-    const drop = 50 + Math.abs(x1 - x2) * 0.12;
-    return `M${x1} ${y1} C${x1} ${Math.max(y1, y2) + drop}, ${x2} ${Math.max(y1, y2) + drop}, ${x2} ${y2}`;
   }
 
   function applyHighlight() {
@@ -647,7 +787,8 @@ const DATA = /*__DISCOPE_DATA__*/null;
       edge.classList.toggle('out', mode === 'out');
       edge.classList.toggle('in', mode === 'in');
       const red = edge.classList.contains('captive') || edge.classList.contains('cycle');
-      edge.setAttribute('marker-end', red ? 'url(#arrow-red)' : mode === 'out' ? 'url(#arrow-out)' : mode === 'in' ? 'url(#arrow-in)' : 'url(#arrow)');
+      // Edges reversed by the layout (cycles) carry their arrow at the start of the path.
+      edge.setAttribute(edge.dataset.rev ? 'marker-start' : 'marker-end', red ? 'url(#arrow-red)' : mode === 'out' ? 'url(#arrow-out)' : mode === 'in' ? 'url(#arrow-in)' : 'url(#arrow)');
     }
     return matches;
   }
@@ -994,10 +1135,17 @@ const DATA = /*__DISCOPE_DATA__*/null;
     });
   }
 
-  // Deep links: #node=<id> selects a service, #diag=<n> selects the n-th diagnostic, #focus=<id> shows a blast radius.
+  // Deep links: #node=<id>, #diag=<n> (n-th diagnostic), #focus=<id> (blast radius), #origins=app,package,framework.
   function applyHash() {
     if (!report) return;
     const params = new URLSearchParams(location.hash.slice(1));
+    if (params.has('origins')) {
+      const wanted = params.get('origins').split(',');
+      for (const k of Object.keys(state.origins)) state.origins[k] = wanted.includes(k);
+      renderHeader();
+      render();
+      fit();
+    }
     if (params.has('focus')) setFocus(params.get('focus'));
     if (params.has('diag')) { const d = (report.diagnostics || [])[Number(params.get('diag'))]; if (d) selectDiagnostic(d); }
     if (params.has('node')) select(params.get('node'), { center: !params.has('focus') });

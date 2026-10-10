@@ -160,6 +160,35 @@ public class DiagnosticRulesTests
     }
 
     [Fact]
+    public void Replacing_a_framework_default_is_not_shadowing()
+    {
+        // e.g. the Blazor template replacing ServerAuthenticationStateProvider.
+        var graph = new TestGraph()
+            .Add("AuthStateProvider", "ServerAuthStateProvider", Scoped, origin: Origins.Framework)
+            .Add("AuthStateProvider", "RevalidatingAuthStateProvider", Scoped)
+            .Add("Supplier", "Supplier", Scoped, origin: Origins.Framework).DependsOn("AuthStateProvider");
+
+        Assert.DoesNotContain(Run(graph), d => d.Id == RuleIds.Shadowed);
+    }
+
+    [Fact]
+    public void App_registrations_replacing_each_other_are_reported_even_without_constructor_consumers()
+    {
+        // e.g. three modules each registering their own OutboxPersistence factory.
+        var graph = new TestGraph()
+            .Add("Outbox", null, Scoped, NodeKinds.Factory)
+            .Add("Outbox", null, Scoped, NodeKinds.Factory)
+            .Add("Outbox", null, Scoped, NodeKinds.Factory);
+
+        var diagnostics = Run(graph);
+        var d = Single(diagnostics, RuleIds.Shadowed);
+        Assert.Equal(Severities.Info, d.Severity);
+        Assert.Contains("registered 3 times (factory #0, factory #1, factory #2)", d.Message);
+        Assert.Contains("only the last one ('factory #2')", d.Message);
+        Assert.DoesNotContain(diagnostics, x => x.Id == RuleIds.Unused);
+    }
+
+    [Fact]
     public void Multiple_registrations_consumed_as_enumerable_are_fine()
     {
         var graph = new TestGraph()

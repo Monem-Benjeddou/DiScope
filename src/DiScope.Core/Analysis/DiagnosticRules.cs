@@ -297,25 +297,51 @@ public static class DiagnosticRules
             if (implementations.Count < 2) continue; // identical duplicates are DI006
 
             var winner = registrations[^1];
+            // Replacing a framework or library default with your own implementation is intentional.
+            // It's only a problem when one of the app's own registrations is silently replaced.
+            if (!registrations.SkipLast(1).Any(n => n.Origin == Origins.App)) continue;
+
+            var incoming = registrations.SelectMany(index.Incoming).ToList();
+            if (incoming.Any(e => e.Dependency.Resolution == Resolutions.Enumerable)) continue; // IEnumerable<T>: intentional
+
             var consumers = index.Incoming(winner)
                 .Where(e => e.Dependency.Resolution is Resolutions.Service or Resolutions.Keyed)
                 .Select(e => e.From)
                 .DistinctBy(n => n.Id)
                 .ToList();
-            if (consumers.Count == 0) continue; // only resolved as IEnumerable<T>: intentional
 
             var service = TypeDisplay.Short(winner.ServiceType);
-            diagnostics.Add(new Diagnostic
+            var names = string.Join(", ", registrations.Select(n => n.Kind == NodeKinds.Factory ? "factory #" + n.RegistrationIndex : GraphIndex.Name(n)));
+            var winnerName = winner.Kind == NodeKinds.Factory ? "factory #" + winner.RegistrationIndex : GraphIndex.Name(winner);
+
+            if (consumers.Count > 0)
             {
-                Id = RuleIds.Shadowed,
-                Severity = Severities.Warning,
-                Title = "Shadowed registration",
-                Message = $"'{service}' is registered {registrations.Count} times ({string.Join(", ", registrations.Select(GraphIndex.Name))}), " +
-                          $"but {string.Join(", ", consumers.Select(c => $"'{GraphIndex.Name(c)}'"))} {(consumers.Count == 1 ? "injects" : "inject")} a single '{service}', " +
-                          $"so only the last one ('{GraphIndex.Name(winner)}') is used.",
-                Help = $"Inject IEnumerable<{service}> to use all of them, use keyed services, or remove the registrations you don't need.",
-                Nodes = registrations.Select(n => n.Id).Concat(consumers.Select(n => n.Id)).ToList(),
-            });
+                diagnostics.Add(new Diagnostic
+                {
+                    Id = RuleIds.Shadowed,
+                    Severity = Severities.Warning,
+                    Title = "Shadowed registration",
+                    Message = $"'{service}' is registered {registrations.Count} times ({names}), " +
+                              $"but {string.Join(", ", consumers.Select(c => $"'{GraphIndex.Name(c)}'"))} {(consumers.Count == 1 ? "injects" : "inject")} a single '{service}', " +
+                              $"so only the last one ('{winnerName}') is used.",
+                    Help = $"Inject IEnumerable<{service}> to use all of them, use keyed services, or remove the registrations you don't need.",
+                    Nodes = registrations.Select(n => n.Id).Concat(consumers.Select(n => n.Id)).ToList(),
+                });
+            }
+            else if (winner.ServiceOrigin == Origins.App)
+            {
+                // Nothing injects it through a constructor, so it's resolved by hand (GetRequiredService<T>) or not at all.
+                diagnostics.Add(new Diagnostic
+                {
+                    Id = RuleIds.Shadowed,
+                    Severity = Severities.Info,
+                    Title = "Shadowed registration",
+                    Message = $"'{service}' is registered {registrations.Count} times ({names}). " +
+                              $"Wherever a single '{service}' is resolved, only the last one ('{winnerName}') is used.",
+                    Help = "If each registration is meant for a different consumer, use keyed services or distinct types. Otherwise, remove the extra registrations.",
+                    Nodes = registrations.Select(n => n.Id).ToList(),
+                });
+            }
         }
     }
 
@@ -348,8 +374,8 @@ public static class DiagnosticRules
             // Only the app's own contracts: framework contracts (IHostedService, IStartupFilter...) are consumed by the framework.
             if (!NodeKinds.IsRegistration(node.Kind) || node.Origin != Origins.App || node.ServiceOrigin != Origins.App) continue;
             if (index.Incoming(node).Count > 0) continue;
-            // Shadowed registrations are reported by DI005.
-            if (index.Nodes.Any(n => n.Id != node.Id && n.ServiceType == node.ServiceType && n.Key == node.Key && index.Incoming(n).Count > 0)) continue;
+            // Services registered more than once are reported by DI005/DI006 instead.
+            if (index.Nodes.Any(n => n.Id != node.Id && NodeKinds.IsRegistration(n.Kind) && n.ServiceType == node.ServiceType && n.Key == node.Key)) continue;
 
             diagnostics.Add(new Diagnostic
             {

@@ -1,0 +1,41 @@
+name: Bug report
+description: DiScope crashed, missed a problem, or reported something wrong.
+labels: [bug]
+body:
+  - type: dropdown
+    id: kind
+    attributes:
+      label: What happened?
+      options:
+        - False positive (reported a problem that isn't one)
+        - Missed a problem
+        - Crash or error
+        - Viewer or VS Code extension issue
+        - Other
+    validations:
+      required: true
+  - type: textarea
+    id: description
+    attributes:
+      label: Description
+      description: What did you expect, and what happened instead?
+    validations:
+      required: true
+  - type: textarea
+    id: repro
+    attributes:
+      label: Registrations that reproduce it
+      description: The smallest set of `services.Add...` calls and constructors that shows the problem.
+      render: csharp
+  - type: textarea
+    id: output
+    attributes:
+      label: Output of `discope <project> --format text`
+      render: text
+  - type: input
+    id: versions
+    attributes:
+      label: Versions
+      description: Output of `discope --version` and `dotnet --version`, plus your OS.
+    validations:
+      required: true

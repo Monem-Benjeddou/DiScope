@@ -13,6 +13,7 @@
     <Description>See your .NET dependency injection graph. Finds captive dependencies, missing registrations, cycles and more in the real IServiceCollection of your app.</Description>
     <PackageTags>dependency-injection;di;ioc;aspnetcore;analyzer;graph;dotnet-tool</PackageTags>
     <PackageReadmeFile>README.md</PackageReadmeFile>
+    <PackageIcon>icon.png</PackageIcon>
   </PropertyGroup>
 
   <ItemGroup>
@@ -25,6 +26,7 @@
     <None Include="..\DiScope.Agent\bin\$(Configuration)\net8.0\DiScope.Agent.dll" Link="agent\DiScope.Agent.dll"
           CopyToOutputDirectory="PreserveNewest" CopyToPublishDirectory="PreserveNewest" Visible="false" />
     <None Include="..\..\README.md" Pack="true" PackagePath="\" Visible="false" />
+    <None Include="..\..\editors\vscode\media\icon.png" Pack="true" PackagePath="\" Visible="false" />
   </ItemGroup>
 
   <ItemGroup>

@@ -1,6 +1,7 @@
 # DiScope
 
 [![CI](https://github.com/Monem-Benjeddou/DiScope/actions/workflows/ci.yml/badge.svg)](https://github.com/Monem-Benjeddou/DiScope/actions/workflows/ci.yml)
+[![NuGet](https://img.shields.io/nuget/v/DiScope.svg)](https://www.nuget.org/packages/DiScope)
 [![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
 ![.NET 8+](https://img.shields.io/badge/.NET-8%2B-512BD4)
 

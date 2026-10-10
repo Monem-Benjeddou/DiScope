@@ -1,18 +1,29 @@
 name: Release
 
 # Push a tag like v0.2.0 to publish. The package version comes from the tag.
+# To retry a release (e.g. after fixing the NuGet key): Actions → Release → Run workflow, with the tag.
 on:
   push:
     tags: ['v*']
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: Existing tag to (re)publish, e.g. v0.1.1
+        required: true
 
 permissions:
   contents: write
+
+env:
+  TAG: ${{ inputs.tag || github.ref_name }}
 
 jobs:
   release:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.tag || github.ref }}
       - uses: actions/setup-dotnet@v4
         with:
           dotnet-version: |
@@ -21,12 +32,17 @@ jobs:
       - run: dotnet test -c Release
 
       - name: Pack
-        run: dotnet pack src/DiScope.Cli -c Release -o artifacts -p:Version=${GITHUB_REF_NAME#v}
+        run: dotnet pack src/DiScope.Cli -c Release -o artifacts -p:Version=${TAG#v}
 
       - name: GitHub release
         env:
           GH_TOKEN: ${{ github.token }}
-        run: gh release create "$GITHUB_REF_NAME" artifacts/*.nupkg --title "DiScope $GITHUB_REF_NAME" --generate-notes --verify-tag
+        run: |
+          if gh release view "$TAG" > /dev/null 2>&1; then
+            gh release upload "$TAG" artifacts/*.nupkg --clobber
+          else
+            gh release create "$TAG" artifacts/*.nupkg --title "DiScope $TAG" --generate-notes --verify-tag
+          fi
 
       - name: Publish to NuGet.org
         env:

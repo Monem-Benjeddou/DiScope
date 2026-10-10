@@ -5,6 +5,12 @@ All notable changes to this project are documented here. The format is based on
 
 ## [Unreleased]
 
+## [0.1.1] - 2026-10-10
+
+### Added
+
+- First release on NuGet.org: `dotnet tool install -g DiScope`.
+
 ## [0.1.0] - 2026-10-10
 
 ### Added
@@ -21,5 +27,6 @@ All notable changes to this project are documented here. The format is based on
 - Layered graph layout with lanes for long edges, so edges never pass under services.
 - Validated against 67 real-world ASP.NET Core, Worker and Orleans apps (20,000+ services).
 
-[Unreleased]: https://github.com/Monem-Benjeddou/DiScope/compare/v0.1.0...HEAD
+[Unreleased]: https://github.com/Monem-Benjeddou/DiScope/compare/v0.1.1...HEAD
+[0.1.1]: https://github.com/Monem-Benjeddou/DiScope/compare/v0.1.0...v0.1.1
 [0.1.0]: https://github.com/Monem-Benjeddou/DiScope/releases/tag/v0.1.0

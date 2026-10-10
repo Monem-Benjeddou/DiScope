@@ -55,7 +55,15 @@ node editors/vscode/test/smoke.js "$PWD/src/DiScope.Cli/bin/Debug/net8.0/discope
 1. Move the *Unreleased* notes in `CHANGELOG.md` under a new version heading.
 2. Tag and push: `git tag v0.2.0 && git push origin v0.2.0`.
 
-The Release workflow runs the tests, packs the tool with the tag's version, creates the GitHub release with the
-`.nupkg`, and publishes to NuGet.org when the `NUGET_API_KEY` repository secret is set.
+The Release workflow runs the tests, packs the tool and the VS Code extension with the tag's version, attaches both
+to the GitHub release, and publishes each one where its repository secret is set:
+
+| Secret | Publishes to |
+|---|---|
+| `NUGET_API_KEY` | NuGet.org (the `discope` tool) |
+| `VSCE_PAT` | VS Code Marketplace (the `publisher` in `editors/vscode/package.json` must match) |
+| `OVSX_PAT` | Open VSX (Cursor, VSCodium) |
+
+To retry a release, run the Release workflow manually (Actions → Release → Run workflow) with the existing tag.
 
 By contributing, you agree that your contributions are licensed under the [MIT License](LICENSE).

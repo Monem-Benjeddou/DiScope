@@ -4,6 +4,13 @@ updates:
     directory: /
     schedule:
       interval: monthly
+    ignore:
+      # samples/LegacyWorker pins Microsoft.Extensions.* 9.x on purpose: it tests packages newer than the
+      # .NET 8 shared framework, matching its EF Core 9 dependency.
+      - dependency-name: "Microsoft.Extensions.*"
+        update-types: ["version-update:semver-major"]
+      - dependency-name: "Microsoft.EntityFrameworkCore*"
+        update-types: ["version-update:semver-major"]
   - package-ecosystem: github-actions
     directory: /
     schedule:

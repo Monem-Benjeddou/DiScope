@@ -20,12 +20,26 @@ public static class DiagnosticRules
         OpaqueFactories(index, diagnostics);
         NotConstructible(index, diagnostics);
 
-        return diagnostics
+        return Merge(diagnostics)
             .OrderBy(d => Severities.Rank(d.Severity))
             .ThenBy(d => d.Id, StringComparer.Ordinal)
             .ThenBy(d => d.Message, StringComparer.Ordinal)
             .ToList();
     }
+
+    /// <summary>
+    /// Several registrations of the same type can produce the very same finding (e.g. a library registering a
+    /// lifecycle participant once per provider). Report it once, highlighting every node.
+    /// </summary>
+    private static IEnumerable<Diagnostic> Merge(List<Diagnostic> diagnostics) =>
+        diagnostics
+            .GroupBy(d => (d.Id, d.Severity, d.Message))
+            .Select(g =>
+            {
+                var first = g.First();
+                first.Nodes = g.SelectMany(d => d.Nodes).Distinct().ToList();
+                return first;
+            });
 
     /// <summary>Edges that are part of constructing the consumer (not per-request Invoke parameters).</summary>
     private static bool IsConstructionEdge(GraphIndex.Edge edge) => edge.Dependency.Site != Sites.Invoke;
@@ -113,6 +127,10 @@ public static class DiagnosticRules
         foreach (var node in index.Nodes.Where(GraphIndex.IsUserCode))
         foreach (var dep in node.Dependencies.Where(d => d.Resolution == Resolutions.Missing))
         {
+            // Factory dependencies are read from every branch of the factory's IL. Inside a library, a branch the
+            // app never takes (e.g. Serilog's "logger was passed in" path) would look like a missing registration.
+            if (dep.Site == Sites.Factory && node.Origin != Origins.App) continue;
+
             var keyText = dep.Key is null ? "" : $" with key \"{dep.Key}\"";
             var where = dep.Site switch
             {
@@ -350,6 +368,8 @@ public static class DiagnosticRules
         foreach (var group in RegistrationGroups(index))
         foreach (var duplicates in group.Where(n => n.Kind == NodeKinds.Type).GroupBy(n => (Identity(n), n.Lifetime)).Where(g => g.Count() > 1))
         {
+            // Libraries often add the same IConfigureOptions/IPostConfigureOptions per provider: harmless, and not yours to fix.
+            if (!duplicates.Any(n => n.Origin == Origins.App)) continue;
             var first = duplicates.First();
             diagnostics.Add(new Diagnostic
             {
@@ -374,6 +394,8 @@ public static class DiagnosticRules
             // Only the app's own contracts: framework contracts (IHostedService, IStartupFilter...) are consumed by the framework.
             if (!NodeKinds.IsRegistration(node.Kind) || node.Origin != Origins.App || node.ServiceOrigin != Origins.App) continue;
             if (index.Incoming(node).Count > 0) continue;
+            // Validators, authentication handlers, notification handlers...: the library resolves them dynamically.
+            if (node.ExtendsExternalType) continue;
             // Services registered more than once are reported by DI005/DI006 instead.
             if (index.Nodes.Any(n => n.Id != node.Id && NodeKinds.IsRegistration(n.Kind) && n.ServiceType == node.ServiceType && n.Key == node.Key)) continue;
 

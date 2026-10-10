@@ -5,6 +5,24 @@ All notable changes to this project are documented here. The format is based on
 
 ## [Unreleased]
 
+### Changed
+
+- Viewer: edges are routed through reserved lanes and never pass under services; cycles are drawn as reversed edges.
+- Tested against 67 real-world ASP.NET Core, Worker and Orleans apps (20,000+ services); false positives fixed:
+  - DI005 no longer flags intentional replacements of framework defaults (e.g. `AuthenticationStateProvider`),
+    and now also reports app registrations that replace each other when nothing injects them.
+  - DI006 ignores duplicates added by libraries (e.g. options configurators registered per provider).
+  - DI002 ignores dependencies inferred from library factories (branches the app never takes) and keyed lookups
+    whose key is computed at runtime.
+  - DI007 ignores services that extend library types (validators, authentication handlers...) and services
+    registered several times.
+  - Identical findings on several registrations are merged into one.
+- Startup code that throws before `builder.Build()` gets a hint about environment variables and `DISCOPE=1`.
+
+### Fixed
+
+- Apps that catch the host stop and call `Environment.Exit` were reported as failures.
+
 ## [0.1.0] - 2026-10-10
 
 ### Added

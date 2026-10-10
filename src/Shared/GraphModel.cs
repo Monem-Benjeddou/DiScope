@@ -59,6 +59,12 @@ sealed class ServiceNode
 
     public string? Assembly { get; set; }
 
+    /// <summary>
+    /// The service derives from or implements a library/framework type (AbstractValidator, AuthenticationHandler,
+    /// INotificationHandler...), so the library may resolve it dynamically, out of DiScope's sight.
+    /// </summary>
+    public bool ExtendsExternalType { get; set; }
+
     /// <summary>Position in the IServiceCollection, or -1 for activated roots such as controllers.</summary>
     public int RegistrationIndex { get; set; } = -1;
 

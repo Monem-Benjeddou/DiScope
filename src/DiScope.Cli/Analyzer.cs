@@ -157,7 +157,14 @@ internal sealed class Analyzer
             // The file is written atomically before the host is stopped. Apps that catch the stop and call
             // Environment.Exit(n) themselves end with their own exit code, so the file is what counts.
             if (!File.Exists(output))
-                throw new CliException($"Could not capture the service collection (exit code {result.ExitCode}):\n{Tail(result.StdErr.Length > 0 ? result.StdErr : result.StdOut)}");
+            {
+                var details = Tail(result.StdErr.Length > 0 ? result.StdErr : result.StdOut);
+                var hint = details.Contains("failed before its host was built", StringComparison.Ordinal)
+                    ? "\n  Your startup code threw before builder.Build(). If it needs environment variables or secrets, " +
+                      "set them when running DiScope (e.g. MY_KEY=value discope ...). DiScope sets DISCOPE=1 so you can skip that code."
+                    : "";
+                throw new CliException($"Could not capture the service collection (exit code {result.ExitCode}):\n{details}{hint}");
+            }
 
             return Report.LoadRawGraph(output);
         }

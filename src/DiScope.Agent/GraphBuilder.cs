@@ -151,9 +151,31 @@ internal sealed class GraphBuilder
         }
 
         var main = concrete ?? r.ServiceType;
+        node.ExtendsExternalType = ExtendsExternalType(r.ServiceType);
         node.Assembly = main.Assembly.GetName().Name;
         node.SourceType = TypeNames.SourceName(main);
         return node;
+    }
+
+    /// <summary>Base classes and interfaces from outside the app, ignoring System.* basics (IDisposable, IEquatable...).</summary>
+    private bool ExtendsExternalType(Type type)
+    {
+        bool External(Type t)
+        {
+            if (t.IsGenericType) t = t.GetGenericTypeDefinition();
+            return Origin(t.Assembly) != Origins.App && !(t.Namespace ?? "").StartsWith("System", StringComparison.Ordinal);
+        }
+
+        try
+        {
+            for (var b = type.BaseType; b is not null && b != typeof(object) && b != typeof(ValueType); b = b.BaseType)
+                if (External(b)) return true;
+            return type.GetInterfaces().Any(External);
+        }
+        catch
+        {
+            return false;
+        }
     }
 
     private static bool IsDisposable(Type type) =>
@@ -335,14 +357,18 @@ internal sealed class GraphBuilder
         var typeArgs = method.DeclaringType is { IsGenericType: true } dt ? dt.GetGenericArguments() : null;
         var methodArgs = method.IsGenericMethod ? method.GetGenericArguments() : null;
 
-        string? lastString = null;
+        // A service key is only known when it's a string literal pushed right before the call.
+        string? keyLiteral = null;
         Type? lastToken = null;
 
-        foreach (var instruction in ILReader.ReadTokenInstructions(method))
+        foreach (var instruction in ILReader.ReadInstructions(method))
         {
+            var previousKey = keyLiteral;
+            keyLiteral = null;
+
             if (instruction.OpCode == OpCodes.Ldstr)
             {
-                lastString = SafeResolve(() => module.ResolveString(instruction.Token));
+                keyLiteral = SafeResolve(() => module.ResolveString(instruction.Token));
                 continue;
             }
 
@@ -365,7 +391,15 @@ internal sealed class GraphBuilder
                                || called.Name == "GetService";
                 var requested = many ? typeof(IEnumerable<>).MakeGenericType(resolved) : resolved;
                 var label = called.IsGenericMethod ? $"{called.Name}<{TypeNames.Format(resolved)}>()" : called.Name + "(typeof)";
-                deps.Add(Resolve(label, requested, keyed, keyed ? lastString : null, optional, Sites.Factory));
+                lastToken = null;
+                if (keyed && previousKey is null)
+                {
+                    // Key computed at runtime: we can't tell which registration it picks.
+                    deps.Add(new Dependency { Name = label, Type = TypeNames.Format(requested), Resolution = Resolutions.Unknown, Site = Sites.Factory });
+                    continue;
+                }
+
+                deps.Add(Resolve(label, requested, keyed, keyed ? previousKey : null, optional, Sites.Factory));
             }
             else if (called.Name == "CreateInstance" && called.IsGenericMethod
                      && called.DeclaringType?.FullName == DiNamespace + "ActivatorUtilities")

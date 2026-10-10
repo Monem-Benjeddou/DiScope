@@ -105,6 +105,19 @@ public class DiagnosticRulesTests
     }
 
     [Fact]
+    public void Missing_dependencies_inferred_from_library_factories_are_not_reported()
+    {
+        var graph = new TestGraph()
+            .Add("DiagnosticContext", null, Singleton, NodeKinds.Factory, origin: Origins.Package)
+            .DependsOn("RegisteredLogger", site: Sites.Factory)
+            .Add("AppFactory", null, Singleton, NodeKinds.Factory)
+            .DependsOn("IReallyMissing", site: Sites.Factory);
+
+        var d = Single(Run(graph), RuleIds.Missing);
+        Assert.Contains("IReallyMissing", d.Message);
+    }
+
+    [Fact]
     public void Two_services_depending_on_each_other_are_a_cycle()
     {
         var graph = new TestGraph()
@@ -215,12 +228,43 @@ public class DiagnosticRulesTests
     }
 
     [Fact]
+    public void Duplicates_added_by_a_library_are_ignored()
+    {
+        var graph = new TestGraph()
+            .Add("IPostConfigureOptions", "Configurator", Transient, origin: Origins.Package)
+            .Add("IPostConfigureOptions", "Configurator", Transient, origin: Origins.Package);
+
+        Assert.DoesNotContain(Run(graph), d => d.Id == RuleIds.Duplicate);
+    }
+
+    [Fact]
+    public void Identical_findings_on_several_registrations_are_merged()
+    {
+        var graph = new TestGraph()
+            .Add("ILifecycleParticipant", "StorageParticipant", Singleton, origin: Origins.Package).DependsOn("IGrainStorage")
+            .Add("ILifecycleParticipant", "StorageParticipant", Singleton, origin: Origins.Package).DependsOn("IGrainStorage");
+
+        var d = Single(Run(graph), RuleIds.Missing);
+        Assert.Equal(new[] { "s0", "s1" }, d.Nodes);
+    }
+
+    [Fact]
     public void App_service_nobody_depends_on_is_possibly_unused()
     {
         var graph = new TestGraph().Add("ILegacy", "Legacy", Transient);
 
         var d = Single(Run(graph), RuleIds.Unused);
         Assert.Equal(Severities.Info, d.Severity);
+    }
+
+    [Fact]
+    public void Services_extending_library_types_are_not_unused()
+    {
+        // e.g. FluentValidation registering each validator as its own type.
+        var graph = new TestGraph().Add("CreateOrderValidator", "CreateOrderValidator", Scoped);
+        graph.Graph.Services[0].ExtendsExternalType = true;
+
+        Assert.Empty(Run(graph));
     }
 
     [Fact]

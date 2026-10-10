@@ -25,8 +25,8 @@ internal static class ILReader
 
     internal readonly record struct Instruction(OpCode OpCode, int Token);
 
-    /// <summary>Yields instructions that carry a metadata token or string (calls, ldtoken, ldstr, newobj).</summary>
-    public static IEnumerable<Instruction> ReadTokenInstructions(MethodInfo method)
+    /// <summary>Yields every instruction; <see cref="Instruction.Token"/> is set for those with a metadata token or string.</summary>
+    public static IEnumerable<Instruction> ReadInstructions(MethodInfo method)
     {
         byte[]? il;
         try { il = method.GetMethodBody()?.GetILAsByteArray(); }
@@ -48,6 +48,7 @@ internal static class ILReader
                 op = OneByte[b];
             }
 
+            var operandToken = 0;
             switch (op.OperandType)
             {
                 case OperandType.InlineNone:
@@ -75,14 +76,15 @@ internal static class ILReader
                 case OperandType.InlineString:
                 case OperandType.InlineField:
                     if (pos + 4 > il.Length) yield break;
-                    var token = BitConverter.ToInt32(il, pos);
+                    operandToken = BitConverter.ToInt32(il, pos);
                     pos += 4;
-                    yield return new Instruction(op, token);
                     break;
                 default: // InlineI, InlineBrTarget, InlineSig, ShortInlineR
                     pos += 4;
                     break;
             }
+
+            yield return new Instruction(op, operandToken);
         }
     }
 }

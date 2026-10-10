@@ -83,9 +83,22 @@ async function analyze(context, { uri, show, silent } = {}) {
   return report;
 }
 
+/**
+ * `discope` from PATH, or the default global tools folder. Editors started from the Dock/Finder often don't
+ * get ~/.dotnet/tools on their PATH (the .NET installer's /etc/paths.d entry uses an unexpanded "~").
+ */
+function resolveTool(configured) {
+  if (configured && configured !== 'discope') return configured;
+  const exe = process.platform === 'win32' ? 'discope.exe' : 'discope';
+  const dirs = (process.env.PATH || '').split(path.delimiter).filter(Boolean);
+  if (dirs.some((d) => fs.existsSync(path.join(d, exe)))) return 'discope';
+  const globalTool = path.join(os.homedir(), '.dotnet', 'tools', exe);
+  return fs.existsSync(globalTool) ? globalTool : 'discope';
+}
+
 function runCli(project) {
   const config = vscode.workspace.getConfiguration('discope');
-  const tool = config.get('path') || 'discope';
+  const tool = resolveTool(config.get('path'));
   const out = path.join(os.tmpdir(), `discope-vscode-${crypto.randomBytes(6).toString('hex')}.json`);
   const args = [project, '--format', 'json', '-o', out, '--fail-on', 'none', '--quiet'];
   const framework = config.get('framework');
@@ -380,4 +393,4 @@ function viewerHtml(context, webview) {
     .replace(/<script>/g, `<script nonce="${nonce}">`);
 }
 
-module.exports = { activate, deactivate, _internal: { responsibleParameter, viewerHtml } };
+module.exports = { activate, deactivate, _internal: { responsibleParameter, viewerHtml, resolveTool } };

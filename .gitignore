@@ -6,3 +6,4 @@ obj/
 artifacts/
 discope-report.*
 TestResults/
+*.vsix

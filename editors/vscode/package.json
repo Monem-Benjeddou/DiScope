@@ -1,0 +1,67 @@
+{
+  "name": "discope",
+  "displayName": "DiScope: DI Graph for .NET",
+  "description": "See your .NET dependency injection graph. Finds captive dependencies, missing registrations, cycles and more in your app's real IServiceCollection.",
+  "version": "0.1.0",
+  "publisher": "discope",
+  "license": "MIT",
+  "icon": "media/icon.png",
+  "engines": {
+    "vscode": "^1.85.0"
+  },
+  "categories": ["Linters", "Visualization", "Other"],
+  "keywords": ["dependency injection", "di", "ioc", "asp.net core", ".net", "c#", "captive dependency"],
+  "main": "./extension.js",
+  "activationEvents": [],
+  "contributes": {
+    "commands": [
+      { "command": "discope.analyze", "title": "Analyze Dependency Injection", "category": "DiScope", "icon": "$(type-hierarchy)" },
+      { "command": "discope.showGraph", "title": "Show DI Graph", "category": "DiScope", "icon": "$(type-hierarchy)" },
+      { "command": "discope.revealInGraph", "title": "Reveal in DI Graph", "category": "DiScope" }
+    ],
+    "menus": {
+      "explorer/context": [
+        { "command": "discope.analyze", "when": "resourceExtname == .csproj || resourceExtname == .fsproj || resourceExtname == .vbproj", "group": "navigation@90" }
+      ],
+      "editor/context": [
+        { "command": "discope.revealInGraph", "when": "editorLangId == csharp", "group": "navigation@90" }
+      ],
+      "commandPalette": [
+        { "command": "discope.revealInGraph", "when": "editorLangId == csharp" }
+      ]
+    },
+    "configuration": {
+      "title": "DiScope",
+      "properties": {
+        "discope.path": {
+          "type": "string",
+          "default": "discope",
+          "markdownDescription": "Path to the `discope` tool (install it with `dotnet tool install -g DiScope`). Can also point to `discope.dll`."
+        },
+        "discope.framework": {
+          "type": "string",
+          "default": "",
+          "markdownDescription": "Target framework for multi-targeted projects, e.g. `net9.0`. Empty uses the first one."
+        },
+        "discope.environment": {
+          "type": "string",
+          "default": "Development",
+          "description": "Environment the app runs in while its services are captured (ASPNETCORE_ENVIRONMENT / DOTNET_ENVIRONMENT)."
+        },
+        "discope.analyzeOnSave": {
+          "type": "boolean",
+          "default": false,
+          "description": "Re-analyze the last project when a C# file in it is saved."
+        },
+        "discope.showInfo": {
+          "type": "boolean",
+          "default": true,
+          "description": "Show info-level findings (possibly unused services, opaque factories) in the Problems panel."
+        }
+      }
+    }
+  },
+  "scripts": {
+    "package": "npx @vscode/vsce package"
+  }
+}

@@ -1,0 +1,19 @@
+<Project Sdk="Microsoft.NET.Sdk.Worker">
+
+  <!--
+    Exercises the classic generic host (Host.CreateDefaultBuilder + ConfigureServices), an app that
+    swallows every exception in Main, and NuGet packages newer than the shared framework
+    (EF Core 9 brings Microsoft.Extensions.* 9.x onto .NET 8).
+  -->
+  <PropertyGroup>
+    <TargetFramework>net8.0</TargetFramework>
+    <IsPackable>false</IsPackable>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Microsoft.EntityFrameworkCore.InMemory" Version="9.0.9" />
+    <PackageReference Include="Microsoft.Extensions.Hosting" Version="9.0.9" />
+    <PackageReference Include="Microsoft.Extensions.Http" Version="9.0.9" />
+  </ItemGroup>
+
+</Project>

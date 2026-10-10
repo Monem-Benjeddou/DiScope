@@ -1,0 +1,22 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <TargetFramework>net8.0</TargetFramework>
+    <IsPackable>false</IsPackable>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <Compile Include="..\Shared\*.cs" Link="Shared\%(Filename)%(Extension)" />
+    <EmbeddedResource Include="Viewer\viewer.html" LogicalName="DiScope.Viewer.html" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <InternalsVisibleTo Include="DiScope.Core.Tests" />
+  </ItemGroup>
+
+  <!-- The VS Code extension ships the same viewer; keep its copy in sync on every build. -->
+  <Target Name="SyncVsCodeViewer" AfterTargets="Build" Condition="Exists('..\..\editors\vscode\media')">
+    <Copy SourceFiles="Viewer\viewer.html" DestinationFolder="..\..\editors\vscode\media" SkipUnchangedFiles="true" />
+  </Target>
+
+</Project>

@@ -50,4 +50,12 @@ node editors/vscode/test/smoke.js "$PWD/src/DiScope.Cli/bin/Debug/net8.0/discope
 - Add or update tests, and make sure `dotnet test` passes.
 - Add a line to `CHANGELOG.md` under *Unreleased*.
 
+## Releasing (maintainers)
+
+1. Move the *Unreleased* notes in `CHANGELOG.md` under a new version heading.
+2. Tag and push: `git tag v0.2.0 && git push origin v0.2.0`.
+
+The Release workflow runs the tests, packs the tool with the tag's version, creates the GitHub release with the
+`.nupkg`, and publishes to NuGet.org when the `NUGET_API_KEY` repository secret is set.
+
 By contributing, you agree that your contributions are licensed under the [MIT License](LICENSE).
